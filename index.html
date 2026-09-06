@@ -37,7 +37,7 @@
         </div>
       </div>
       <span class="text-xs px-3 py-1 rounded-full border border-yellow-500/40 text-yellow-400 bg-yellow-950/20 font-medium">
-        Gemini AI Active
+        Multimodal Vision Active
       </span>
     </div>
   </header>
@@ -51,7 +51,7 @@
       Solusi Cepat & Cerdas Konten Berkualitas Tinggi
     </h2>
     <p class="text-neutral-400 text-sm md:text-base max-w-xl mx-auto">
-      Kecerdasan buatan menyusun naskah orisinal dan arahan visual secara mendalam untuk kebutuhan penjualan produk Anda.
+      Unggah foto produk untuk dianalisis langsung oleh AI dan hasilkan naskah promosi akurat sesuai detail fisik barang.
     </p>
   </section>
 
@@ -73,16 +73,36 @@
 
         <div>
           <label class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1.5">Target Audiens & Masalah Utama</label>
-          <input id="targetAudience" type="text" placeholder="Contoh: Remaja dengan masalah pori besar dan komedo" 
+          <input id="targetAudience" type="text" placeholder="Contoh: Remaja dengan masalah pori besar dan jerawat" 
             class="w-full bg-[#1b1b22] border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-yellow-400" />
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1.5">Keunggulan Utama / Promo</label>
-          <textarea id="productUSP" rows="2" placeholder="Contoh: Bentuk stik praktis, menenangkan kemerahan, promo beli 1 gratis 1" 
+          <textarea id="productUSP" rows="2" placeholder="Contoh: Bentuk stik higienis, meredakan kemerahan, promo buy 1 get 1" 
             class="w-full bg-[#1b1b22] border border-neutral-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-yellow-400"></textarea>
         </div>
 
+        <!-- Upload Foto Produk (Maks 10 Foto) -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider">Foto Produk</label>
+            <span id="photoCount" class="text-xs text-yellow-400 font-semibold">0 / 10 foto</span>
+          </div>
+
+          <label for="imageUpload" class="flex flex-col items-center justify-center border-2 border-dashed border-neutral-700 hover:border-yellow-400 rounded-xl p-4 cursor-pointer bg-[#1b1b22]/50 transition group">
+            <svg class="w-6 h-6 text-neutral-400 group-hover:text-yellow-400 mb-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <span class="text-xs text-neutral-400 group-hover:text-neutral-200">Klik untuk pilih gambar (maksimal 10)</span>
+            <input id="imageUpload" type="file" accept="image/*" multiple class="hidden" />
+          </label>
+
+          <!-- Pratinjau Gambar -->
+          <div id="imagePreviewContainer" class="grid grid-cols-5 gap-2 mt-3 empty:hidden"></div>
+        </div>
+
+        <!-- Mode Pilihan -->
         <div>
           <label class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-2">Pilih Format Konten</label>
           <div class="grid grid-cols-2 gap-2.5" id="modeSelector">
@@ -124,13 +144,13 @@
         </div>
 
         <div id="resultBox" class="bg-[#0e0e12] border border-neutral-800 rounded-xl p-4 text-xs md:text-sm text-neutral-300 font-mono whitespace-pre-wrap leading-relaxed max-h-[460px] overflow-y-auto">
-Isi formulir di sebelah kiri dan tekan tombol untuk meminta AI menyusun naskah promosi affiliate orisinal.
+Unggah foto produk atau isi formulir di sebelah kiri, lalu klik tombol untuk meminta AI menyusun naskah promosi affiliate lengkap.
         </div>
       </div>
 
       <div class="mt-4 pt-3 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-500">
-        <span>Model: Gemini 1.5 Flash</span>
-        <span class="text-yellow-500">Koneksi API Terhubung</span>
+        <span>Model: Gemini 1.5 Flash Vision</span>
+        <span class="text-yellow-500">Analisis Gambar Aktif</span>
       </div>
     </div>
 
@@ -139,6 +159,7 @@ Isi formulir di sebelah kiri dan tekan tombol untuk meminta AI menyusun naskah p
   <script>
     const GEMINI_API_KEY = "AQ.Ab8RN6LD86HI9VKWXWqygja-8U1vBK4NLroG8VKHMO4RyM-UMA";
     let selectedMode = 'ugc';
+    let uploadedImages = []; // Menyimpan objek { file, base64, mimeType }
 
     // Pemilihan Format Konten
     const modeButtons = document.querySelectorAll('.mode-btn');
@@ -154,7 +175,82 @@ Isi formulir di sebelah kiri dan tekan tombol untuk meminta AI menyusun naskah p
       });
     });
 
-    // Permintaan ke Gemini API
+    // Pengelolaan Upload dan Pratinjau Foto
+    const imageUpload = document.getElementById('imageUpload');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    const photoCount = document.getElementById('photoCount');
+
+    imageUpload.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files);
+      if (!files.length) return;
+
+      const remainingSlots = 10 - uploadedImages.length;
+      if (remainingSlots <= 0) {
+        alert('Batas maksimal 10 foto sudah terpenuhi.');
+        imageUpload.value = '';
+        return;
+      }
+
+      const filesToProcess = files.slice(0, remainingSlots);
+      if (files.length > remainingSlots) {
+        alert(`Hanya ${remainingSlots} foto yang ditambahkan karena batas maksimal adalah 10 foto.`);
+      }
+
+      for (const file of filesToProcess) {
+        if (!file.type.startsWith('image/')) continue;
+        const base64Data = await convertFileToBase64(file);
+        uploadedImages.push({
+          file,
+          base64: base64Data,
+          mimeType: file.type
+        });
+      }
+
+      renderPreviews();
+      imageUpload.value = '';
+    });
+
+    function convertFileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          const base64Clean = result.split(',')[1];
+          resolve(base64Clean);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function renderPreviews() {
+      imagePreviewContainer.innerHTML = '';
+      photoCount.textContent = `${uploadedImages.length} / 10 foto`;
+
+      uploadedImages.forEach((img, index) => {
+        const itemWrapper = document.createElement('div');
+        itemWrapper.className = 'relative group aspect-square rounded-lg overflow-hidden border border-neutral-700 bg-neutral-900';
+
+        const imageEl = document.createElement('img');
+        imageEl.src = `data:${img.mimeType};base64,${img.base64}`;
+        imageEl.className = 'w-full h-full object-cover';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.className = 'absolute top-1 right-1 w-5 h-5 bg-black/80 text-yellow-400 rounded-full flex items-center justify-center text-xs font-bold opacity-80 hover:opacity-100 transition';
+        removeBtn.addEventListener('click', () => {
+          uploadedImages.splice(index, 1);
+          renderPreviews();
+        });
+
+        itemWrapper.appendChild(imageEl);
+        itemWrapper.appendChild(removeBtn);
+        imagePreviewContainer.appendChild(itemWrapper);
+      });
+    }
+
+    // Permintaan ke Gemini API dengan Gambar Multimodal
     document.getElementById('generateBtn').addEventListener('click', async () => {
       const product = document.getElementById('productName').value.trim() || 'Produk Affiliate';
       const audience = document.getElementById('targetAudience').value.trim() || 'Audiens umum yang membutuhkan solusi praktis';
@@ -163,15 +259,33 @@ Isi formulir di sebelah kiri dan tekan tombol untuk meminta AI menyusun naskah p
       const generateBtn = document.getElementById('generateBtn');
 
       const prompts = {
-        ugc: `Bertindaklah sebagai copywriter affiliate profesional. Buatkan naskah video gaya UGC berdurasi 30-45 detik untuk produk: "${product}". Target audiens dan masalah: "${audience}". Keunggulan produk: "${usp}". Struktur naskah harus memiliki Hook yang kuat, Problem, Solution, dan Call to Action menuju keranjang belanja. Sertakan petunjuk visual ekspresi wajah dan intonasi suara.`,
-        pov: `Bertindaklah sebagai pembuat konten video kreatif. Susun naskah dengan konsep POV orang pertama untuk produk: "${product}". Masalah audiens: "${audience}". Keunggulan: "${usp}". Tuliskan teks yang muncul di layar, arahan pergerakan kamera, serta narasi suara yang santai dan meyakinkan.`,
-        storyboard: `Buatkan storyboard video promosi berformat adegan berurutan untuk produk: "${product}". Target: "${audience}". Keunggulan: "${usp}". Bagi ke dalam 4 adegan terpisah. Tiap adegan wajib memuat: durasi detik, arahan visual, teks di layar, dan narasi audio.`,
-        live_host: `Susun panduan berbicara untuk pembawa acara siaran langsung penjualan online produk: "${product}". Audiens: "${audience}". Keunggulan dan promo: "${usp}". Naskah harus memiliki sapaan pembuka yang menarik penonton agar tidak berpindah kanal, penjelasan manfaat, dan desakan membeli sebelum promo berakhir.`
+        ugc: `Bertindaklah sebagai copywriter affiliate profesional. Buatkan naskah video gaya UGC berdurasi 30-45 detik untuk produk: "${product}". Target audiens dan masalah: "${audience}". Keunggulan produk: "${usp}". Struktur naskah harus memiliki Hook yang kuat, Problem, Solution, dan Call to Action menuju keranjang belanja. Sertakan petunjuk visual ekspresi wajah, interaksi tangan dengan produk, serta intonasi suara.`,
+        pov: `Bertindaklah sebagai pembuat konten video kreatif. Susun naskah dengan konsep POV orang pertama untuk produk: "${product}". Masalah audiens: "${audience}". Keunggulan: "${usp}". Tuliskan teks yang muncul di layar, arahan pergerakan kamera saat memegang atau memakai produk, serta narasi suara yang santai dan meyakinkan.`,
+        storyboard: `Buatkan storyboard video promosi berformat adegan berurutan untuk produk: "${product}". Target: "${audience}". Keunggulan: "${usp}". Bagi ke dalam 4 adegan terpisah. Tiap adegan wajib memuat: durasi detik, arahan visual rinci tentang sudut pengambilan gambar produk, teks di layar, dan narasi audio.`,
+        live_host: `Susun panduan berbicara untuk pembawa acara siaran langsung penjualan online produk: "${product}". Audiens: "${audience}". Keunggulan dan promo: "${usp}". Naskah harus memiliki sapaan pembuka, arahan gestur menunjukkan kemasan/detail produk ke kamera live, penjelasan manfaat, dan desakan membeli di keranjang kuning sebelum promo berakhir.`
       };
+
+      let basePrompt = prompts[selectedMode];
+      if (uploadedImages.length > 0) {
+        basePrompt += `\n\nCatatan Tambahan: Perhatikan dan analisis ${uploadedImages.length} foto produk terlampir. Sebutkan atau sesuaikan detail fisik kemasan, warna, tekstur, atau fitur visual nyata yang tampak pada foto ke dalam skrip dan arahan visual.`;
+      }
+
+      // Bangun struktur parts (teks + gambar)
+      const parts = [{ text: basePrompt }];
+      uploadedImages.forEach(img => {
+        parts.push({
+          inline_data: {
+            mime_type: img.mimeType,
+            data: img.base64
+          }
+        });
+      });
 
       generateBtn.disabled = true;
       generateBtn.classList.add('opacity-50');
-      resultBox.textContent = "Kecerdasan buatan sedang menyusun naskah konten Anda...";
+      resultBox.textContent = uploadedImages.length > 0 
+        ? `Sedang menganalisis ${uploadedImages.length} foto produk dan menyusun konten...`
+        : "Kecerdasan buatan sedang menyusun naskah konten Anda...";
 
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
@@ -180,9 +294,7 @@ Isi formulir di sebelah kiri dan tekan tombol untuk meminta AI menyusun naskah p
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            contents: [{
-              parts: [{ text: prompts[selectedMode] }]
-            }]
+            contents: [{ parts: parts }]
           })
         });
 
